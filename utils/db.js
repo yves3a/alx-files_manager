@@ -1,36 +1,75 @@
-import { MongoClient } from 'mongodb';
+#!/usr/bin/env node
 
-const HOST = process.env.DB_HOST || 'localhost';
-const PORT = process.env.DB_PORT || 27017;
-const DATABASE = process.env.DB_DATABASE || 'files_manager';
-const url = `mongodb://${HOST}:${PORT}`;
+// Implement a class DBClient that will be used to interact with the MongoDB database
 
+const { MongoClient } = require('mongodb');
+
+/**
+ * Class DBClient
+ */
 class DBClient {
+  /**
+   * Constructor
+   */
   constructor() {
-    this.client = new MongoClient(url, { useUnifiedTopology: true, useNewUrlParser: true });
-    this.client.connect().then(() => {
-      this.db = this.client.db(`${DATABASE}`);
-    }).catch((err) => {
-      console.log(err);
+    const host = process.env.DB_HOST || 'localhost';
+    const port = process.env.DB_PORT || '27017';
+    const database = process.env.DB_DATABASE || 'files_manager';
+    const url = `mongodb://${host}:${port}`;
+
+    this.client = new MongoClient(url, { useUnifiedTopology: true });
+    this.client.connect();
+    this.db = this.client.db(database);
+  }
+
+  /**
+   * Check if the connection is alive
+   *
+   * @returns {boolean} Returns true if the client is connected to the server,
+   *  otherwise returns false
+   */
+  isAlive() {
+    return this.client.topology.isConnected();
+  }
+
+  async isAliveWithTimeout(timeout = 2000) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        console.error('MongoDB ping timed out');
+        resolve(false);
+      }, timeout);
+
+      this.client
+        .db()
+        .admin()
+        .ping()
+        .then(() => {
+          clearTimeout(timer);
+          resolve(true);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          console.error('MongoDB ping failed:', error.message);
+          resolve(false);
+        });
     });
   }
 
-  isAlive() {
-    return this.client.isConnected();
-  }
-
+  /**
+   * Count the number of documents in the collection users
+   */
   async nbUsers() {
-    const users = this.db.collection('users');
-    const usersNum = await users.countDocuments();
-    return usersNum;
+    return this.db.collection('users').countDocuments();
   }
 
+  /**
+   * Count the number of documents in the collection files
+   */
   async nbFiles() {
-    const files = this.db.collection('files');
-    const filesNum = await files.countDocuments();
-    return filesNum;
+    return this.db.collection('files').countDocuments();
   }
 }
 
 const dbClient = new DBClient();
-module.exports = dbClient;
+
+export default dbClient;
